@@ -1,0 +1,38 @@
+{
+  "name": "socket_server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.ts",
+  "scripts": {
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "dev": "tsc && node dist/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@9.5.0+sha512.140036830124618d624a2187b50d04289d5a087f326c9edfc0ccd733d76c4f52c3a313d4fc148794a2a9d81553016004e6742e8cf850670268a7387fc220c903",
+  "devDependencies": {
+    "@types/node": "^22.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.1",
+    "@typescript-eslint/parser": "^8.0.1",
+    "eslint": "^9.8.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@types/express": "^4.17.21",
+    "@types/ws": "^8.5.12",
+    "express": "^4.19.2",
+    "mediasoup": "^3.14.9",
+    "mediasoup-client": "^3.7.14",
+    "nodemon": "^3.1.4",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.16.5",
+    "ws": "^8.18.0"
+  }
+}
