@@ -8,7 +8,8 @@ const ROOM_CLEANUP_INTERVAL = 60000; // 1 minute
 const ROOM_MAX_IDLE_TIME = 300000; // 5 minutes
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ noServer: true });
+// const wss = new WebSocket.Server({ noServer: true });
+const wss = new WebSocket.Server({ server });
 const port = process.env.PORT || 3000;
 
 interface Room {
@@ -72,8 +73,8 @@ app.get('/', (req, res) => {
 // });
 
 async function createWebSocketServer(initialPort: number = 3000): Promise<WebSocket.Server> {
-  const server = http.createServer();
-  const wss = new WebSocket.Server({ server });
+  // const server = http.createServer();
+  // const wss = new WebSocket.Server({ server });
 
   return new Promise((resolve, reject) => {
     const tryPort = (port: number) => {
@@ -96,7 +97,8 @@ async function createWebSocketServer(initialPort: number = 3000): Promise<WebSoc
 
 async function main() {
   await initializeWorker();
-  
+  // const wss = new WebSocket.Server({ noServer: true });
+  const wss = await createWebSocketServer();
   // WebSocket connection handler
 wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
   console.log('New WebSocket connection');
@@ -152,9 +154,9 @@ wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
   });
 });
 
-  server.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-  });
+  // server.listen(port, () => {
+  //   console.log(`Server running on port ${port}`);
+  // });
 
   setInterval(cleanupRooms, ROOM_CLEANUP_INTERVAL);
 }
