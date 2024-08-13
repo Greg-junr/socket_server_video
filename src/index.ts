@@ -2,6 +2,7 @@ import * as WebSocket from 'ws';
 import * as http from 'http';
 import * as mediasoup from 'mediasoup';
 
+import cors from 'cors';
 import express from 'express';
 
 const ROOM_CLEANUP_INTERVAL = 60000; // 1 minute
@@ -59,6 +60,8 @@ async function initializeWorker() {
   console.log('mediasoup worker created');
   return worker;
 }
+
+app.use(cors());
 
 // HTTP endpoints
 app.get('/', (req, res) => {
