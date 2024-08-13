@@ -54,7 +54,7 @@ async function initializeWorker() {
   return worker;
 }
 
-async function createWebSocketServer(initialPort: number = 3000): Promise<WebSocket.Server> {
+async function createWebSocketServer(initialPort: number = 8080): Promise<WebSocket.Server> {
   const server = http.createServer();
   const wss = new WebSocket.Server({ server });
 
