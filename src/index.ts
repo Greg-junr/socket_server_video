@@ -108,6 +108,7 @@ wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
 
   socket.on('message', async (message: string) => {
     const data = JSON.parse(message);
+    console.log('Received message:', data);
     try {
       switch (data.type) {
         case 'create-room':
@@ -161,13 +162,14 @@ wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
   //   console.log(`Server running on port ${port}`);
   // });
 
-  setInterval(cleanupRooms, ROOM_CLEANUP_INTERVAL);
+  // setInterval(cleanupRooms, ROOM_CLEANUP_INTERVAL);
 }
 
 async function handleCreateRoom(socket: WebSocket, data: any) {
   const { roomId, isPrivate } = data;
   if (rooms.has(roomId)) {
     socket.send(JSON.stringify({ type: 'error', message: 'Room already exists' }));
+    console.log('Room already exists:', roomId);
     return;
   }
 
@@ -180,12 +182,15 @@ async function handleCreateRoom(socket: WebSocket, data: any) {
     lastActivity: Date.now(),
   };
   rooms.set(roomId, room);
+  console.log('Room created:', roomId);
+  console.log('Rooms:', rooms);
 
   socket.send(JSON.stringify({ type: 'room-created', roomId, isPrivate }));
 }
 
 
 async function handleJoinRoom(socket: WebSocket, data: any) {
+  console.log('handleJoinRoom', data?.roomId, data?.peerId);
   const { roomId, peerId } = data;
   const room = rooms.get(roomId);
 
@@ -268,6 +273,7 @@ async function handleUnmuteAudio(socket: WebSocket, data: any) {
 }
 
 async function handleVideoOff(socket: WebSocket, data: any) {
+  console.log('handleVideoOff');
   const { roomId, peerId } = data;
   const room = rooms.get(roomId);
   const peer = room?.peers.get(peerId);
@@ -291,6 +297,7 @@ async function handleVideoOff(socket: WebSocket, data: any) {
 }
 
 async function handleVideoOn(socket: WebSocket, data: any) {
+  console.log('handleVideoOn');
   const { roomId, peerId } = data;
   const room = rooms.get(roomId);
   const peer = room?.peers.get(peerId);
@@ -355,6 +362,7 @@ function cleanupPeer(peer: Peer) {
 }
 
 function notifyPeerLeft(room: Room, peerId: string) {
+  console.log('Peer left:', peerId);
   for (const otherPeer of room.peers.values()) {
     otherPeer.socket.send(JSON.stringify({ type: 'peer-left', peerId }));
   }
@@ -483,7 +491,8 @@ async function createWebRtcTransport(router: mediasoup.types.Router) {
     listenIps: [
       {
         ip: '0.0.0.0',
-        announcedIp: 'ws://viaduct.proxy.rlwy.net:33910', // Replace with your public IP or domain
+        announcedIp: '127.0.0.1', // Replace with your public IP or domain
+        // announcedIp: 'ws://viaduct.proxy.rlwy.net:33910', // Replace with your public IP or domain
       },
     ],
     enableUdp: true,
