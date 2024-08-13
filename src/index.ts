@@ -2,9 +2,14 @@ import * as WebSocket from 'ws';
 import * as http from 'http';
 import * as mediasoup from 'mediasoup';
 
-const port = 3000;
+import express from 'express';
+
 const ROOM_CLEANUP_INTERVAL = 60000; // 1 minute
 const ROOM_MAX_IDLE_TIME = 300000; // 5 minutes
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ noServer: true });
+const port = process.env.PORT || 3000;
 
 interface Room {
   id: string;
@@ -54,7 +59,96 @@ async function initializeWorker() {
   return worker;
 }
 
-async function createWebSocketServer(initialPort: number = 8080): Promise<WebSocket.Server> {
+// HTTP endpoints
+app.get('/', (req, res) => {
+  res.send('Video Call Server is running');
+});
+
+app.get('/rooms', (req, res) => {
+  const roomList = Array.from(rooms.keys());
+  res.json({ rooms: roomList });
+});
+
+app.post('/create-room', express.json(), (req, res) => {
+  const { roomId, isPrivate } = req.body;
+  if (rooms.has(roomId)) {
+    res.status(400).json({ error: 'Room already exists' });
+    return;
+  }
+  
+  // Note: This is just reserving the room ID. The actual Room object
+  // will be created when the first peer connects via WebSocket.
+  rooms.set(roomId, {
+    id: roomId,
+    router: null as any, // Will be set up when first peer joins
+    peers: new Map(),
+    isPrivate: isPrivate || false,
+    lastActivity: Date.now(),
+  });
+  
+  res.json({ roomId, message: 'Room created successfully' });
+});
+
+// WebSocket connection handler
+wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
+  console.log('New WebSocket connection');
+
+  socket.on('message', async (message: string) => {
+    const data = JSON.parse(message);
+    try {
+      switch (data.type) {
+        case 'join-room':
+          await handleJoinRoom(socket, data);
+          break;
+        case 'create-transport':
+          await handleCreateTransport(socket, data);
+          break;
+        case 'connect-transport':
+          await handleConnectTransport(socket, data);
+          break;
+        case 'produce':
+          await handleProduce(socket, data);
+          break;
+        case 'consume':
+          await handleConsume(socket, data);
+          break;
+        case 'resume-consumer':
+          await handleResumeConsumer(socket, data);
+          break;
+        case 'mute-audio':
+          await handleMuteAudio(socket, data);
+          break;
+        case 'unmute-audio':
+          await handleUnmuteAudio(socket, data);
+          break;
+        case 'video-off':
+          await handleVideoOff(socket, data);
+          break;
+        case 'video-on':
+          await handleVideoOn(socket, data);
+          break;
+        default:
+          console.warn(`Unknown message type: ${data.type}`);
+      }
+    } catch (error) {
+      console.error('Error handling message:', error);
+      socket.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
+    }
+  });
+
+  socket.on('close', () => {
+    handleDisconnect(socket);
+  });
+});
+
+// Upgrade HTTP server to WebSocket when necessary
+server.on('upgrade', (request, socket, head) => {
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit('connection', ws, request);
+  });
+});
+
+async function createWebSocketServer(initialPort: number = 3000): Promise<WebSocket.Server> {
   const server = http.createServer();
   const wss = new WebSocket.Server({ server });
 
@@ -79,64 +173,10 @@ async function createWebSocketServer(initialPort: number = 8080): Promise<WebSoc
 
 async function main() {
   await initializeWorker();
-  const wss = await createWebSocketServer();
-
-  wss.on('connection', (socket: WebSocket) => {
-    console.log('New WebSocket connection');
-
-    socket.on('message', async (message: string) => {
-      const data = JSON.parse(message);
-      try {
-        switch (data.type) {
-          case 'create-room':
-            await handleCreateRoom(socket, data);
-            break;
-          case 'join-room':
-            await handleJoinRoom(socket, data);
-            break;
-          case 'create-transport':
-            await handleCreateTransport(socket, data);
-            break;
-          case 'connect-transport':
-            await handleConnectTransport(socket, data);
-            break;
-          case 'produce':
-            await handleProduce(socket, data);
-            break;
-          case 'consume':
-            await handleConsume(socket, data);
-            break;
-          case 'resume-consumer':
-            await handleResumeConsumer(socket, data);
-            break;
-          case 'mute-audio':
-            await handleMuteAudio(socket, data);
-            break;
-          case 'unmute-audio':
-            await handleUnmuteAudio(socket, data);
-            break;
-          case 'video-off':
-            await handleVideoOff(socket, data);
-            break;
-          case 'video-on':
-            await handleVideoOn(socket, data);
-            break;
-          default:
-            console.warn(`Unknown message type: ${data.type}`);
-        }
-      } catch (error) {
-        console.error('Error handling message:', error);
-        socket.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
-      }
-    });
-
-    socket.on('close', () => {
-      handleDisconnect(socket);
-    });
+  
+  server.listen(port, () => {
+    console.log(`Server running on port ${port}`);
   });
-
-  // Start room cleanup interval
-  setInterval(cleanupRooms, ROOM_CLEANUP_INTERVAL);
 }
 
 async function handleCreateRoom(socket: WebSocket, data: any) {
