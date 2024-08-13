@@ -64,32 +64,40 @@ app.get('/', (req, res) => {
   res.send('Video Call Server is running');
 });
 
-app.get('/rooms', (req, res) => {
-  const roomList = Array.from(rooms.keys());
-  res.json({ rooms: roomList });
-});
+// // Upgrade HTTP server to WebSocket when necessary
+// server.on('upgrade', (request, socket, head) => {
+//   wss.handleUpgrade(request, socket, head, (ws) => {
+//     wss.emit('connection', ws, request);
+//   });
+// });
 
-app.post('/create-room', express.json(), (req, res) => {
-  const { roomId, isPrivate } = req.body;
-  if (rooms.has(roomId)) {
-    res.status(400).json({ error: 'Room already exists' });
-    return;
-  }
-  
-  // Note: This is just reserving the room ID. The actual Room object
-  // will be created when the first peer connects via WebSocket.
-  rooms.set(roomId, {
-    id: roomId,
-    router: null as any, // Will be set up when first peer joins
-    peers: new Map(),
-    isPrivate: isPrivate || false,
-    lastActivity: Date.now(),
+async function createWebSocketServer(initialPort: number = 3000): Promise<WebSocket.Server> {
+  const server = http.createServer();
+  const wss = new WebSocket.Server({ server });
+
+  return new Promise((resolve, reject) => {
+    const tryPort = (port: number) => {
+      server.listen(port, () => {
+        console.log(`WebSocket server is running on port ${port}`);
+        resolve(wss);
+      }).on('error', (error: any) => {
+        if (error.code === 'EADDRINUSE') {
+          console.log(`Port ${port} is busy, trying ${port + 1}`);
+          tryPort(port + 1);
+        } else {
+          reject(error);
+        }
+      });
+    };
+
+    tryPort(initialPort);
   });
-  
-  res.json({ roomId, message: 'Room created successfully' });
-});
+}
 
-// WebSocket connection handler
+async function main() {
+  await initializeWorker();
+  
+  // WebSocket connection handler
 wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
   console.log('New WebSocket connection');
 
@@ -97,6 +105,9 @@ wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
     const data = JSON.parse(message);
     try {
       switch (data.type) {
+        case 'create-room':
+            await handleCreateRoom(socket, data);
+            break;
         case 'join-room':
           await handleJoinRoom(socket, data);
           break;
@@ -141,42 +152,11 @@ wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
   });
 });
 
-// Upgrade HTTP server to WebSocket when necessary
-server.on('upgrade', (request, socket, head) => {
-  wss.handleUpgrade(request, socket, head, (ws) => {
-    wss.emit('connection', ws, request);
-  });
-});
-
-async function createWebSocketServer(initialPort: number = 3000): Promise<WebSocket.Server> {
-  const server = http.createServer();
-  const wss = new WebSocket.Server({ server });
-
-  return new Promise((resolve, reject) => {
-    const tryPort = (port: number) => {
-      server.listen(port, () => {
-        console.log(`WebSocket server is running on port ${port}`);
-        resolve(wss);
-      }).on('error', (error: any) => {
-        if (error.code === 'EADDRINUSE') {
-          console.log(`Port ${port} is busy, trying ${port + 1}`);
-          tryPort(port + 1);
-        } else {
-          reject(error);
-        }
-      });
-    };
-
-    tryPort(initialPort);
-  });
-}
-
-async function main() {
-  await initializeWorker();
-  
   server.listen(port, () => {
     console.log(`Server running on port ${port}`);
   });
+
+  setInterval(cleanupRooms, ROOM_CLEANUP_INTERVAL);
 }
 
 async function handleCreateRoom(socket: WebSocket, data: any) {
