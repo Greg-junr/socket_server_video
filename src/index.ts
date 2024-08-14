@@ -144,6 +144,15 @@ wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
         case 'video-on':
           await handleVideoOn(socket, data);
           break;
+        case 'offer':
+          await handleOffer(socket, data);
+          break;
+        case 'answer':
+          await handleAnswer(socket, data);
+          break;
+        case 'ice-candidate':
+          await handleIceCandidate(socket, data);
+          break;
         default:
           console.warn(`Unknown message type: ${data.type}`);
       }
@@ -220,6 +229,7 @@ async function handleJoinRoom(socket: WebSocket, data: any) {
   socket.send(JSON.stringify({ type: 'joined-room', roomId, peerId, routerRtpCapabilities }));
 
   for (const otherPeer of room.peers.values()) {
+    console.log('otherPeer', otherPeer);
     if (otherPeer.id !== peerId) {
       otherPeer.socket.send(JSON.stringify({ type: 'new-peer', peerId }));
     }
@@ -501,6 +511,81 @@ async function createWebRtcTransport(router: mediasoup.types.Router) {
   });
 
   return transport;
+}
+
+async function handleOffer(socket: WebSocket, data: any) {
+  const { roomId, peerId, targetPeerId, sdp } = data;
+  const room = rooms.get(roomId);
+
+  if (!room) {
+    socket.send(JSON.stringify({ type: 'error', message: 'Room not found' }));
+    return;
+  }
+
+  const targetPeer = room.peers.get(targetPeerId);
+  if (!targetPeer) {
+    socket.send(JSON.stringify({ type: 'error', message: 'Target peer not found' }));
+    return;
+  }
+
+  // Relay the offer to the target peer
+  targetPeer.socket.send(JSON.stringify({
+    type: 'offer',
+    peerId: peerId,
+    sdp: sdp
+  }));
+
+  room.lastActivity = Date.now();
+}
+
+async function handleAnswer(socket: WebSocket, data: any) {
+  const { roomId, peerId, targetPeerId, sdp } = data;
+  const room = rooms.get(roomId);
+
+  if (!room) {
+    socket.send(JSON.stringify({ type: 'error', message: 'Room not found' }));
+    return;
+  }
+
+  const targetPeer = room.peers.get(targetPeerId);
+  if (!targetPeer) {
+    socket.send(JSON.stringify({ type: 'error', message: 'Target peer not found' }));
+    return;
+  }
+
+  // Relay the answer to the target peer
+  targetPeer.socket.send(JSON.stringify({
+    type: 'answer',
+    peerId: peerId,
+    sdp: sdp
+  }));
+
+  room.lastActivity = Date.now();
+}
+
+async function handleIceCandidate(socket: WebSocket, data: any) {
+  const { roomId, peerId, targetPeerId, candidate } = data;
+  const room = rooms.get(roomId);
+
+  if (!room) {
+    socket.send(JSON.stringify({ type: 'error', message: 'Room not found' }));
+    return;
+  }
+
+  const targetPeer = room.peers.get(targetPeerId);
+  if (!targetPeer) {
+    socket.send(JSON.stringify({ type: 'error', message: 'Target peer not found' }));
+    return;
+  }
+
+  // Relay the ICE candidate to the target peer
+  targetPeer.socket.send(JSON.stringify({
+    type: 'ice-candidate',
+    peerId: peerId,
+    candidate: candidate
+  }));
+
+  room.lastActivity = Date.now();
 }
 
 main().catch(error => {
