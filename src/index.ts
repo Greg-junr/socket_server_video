@@ -199,17 +199,11 @@ async function handleCreateRoom(socket: WebSocket, data: any) {
 
 
 async function handleJoinRoom(socket: WebSocket, data: any) {
-  console.log('handleJoinRoom', data?.roomId, data?.peerId);
   const { roomId, peerId } = data;
   const room = rooms.get(roomId);
 
   if (!room) {
     socket.send(JSON.stringify({ type: 'error', message: 'Room not found' }));
-    return;
-  }
-
-  if (room.isPrivate && room.peers.size >= 2) {
-    socket.send(JSON.stringify({ type: 'error', message: 'Private room is full' }));
     return;
   }
 
@@ -225,11 +219,17 @@ async function handleJoinRoom(socket: WebSocket, data: any) {
   room.peers.set(peerId, peer);
   room.lastActivity = Date.now();
 
-  const routerRtpCapabilities = room.router.rtpCapabilities;
-  socket.send(JSON.stringify({ type: 'joined-room', roomId, peerId, routerRtpCapabilities }));
+  const existingPeers = Array.from(room.peers.keys()).filter(id => id !== peerId);
 
+  socket.send(JSON.stringify({
+    type: 'joined-room',
+    roomId,
+    peerId,
+    existingPeers,
+  }));
+
+  // Notify existing peers about the new peer
   for (const otherPeer of room.peers.values()) {
-    console.log('otherPeer', otherPeer);
     if (otherPeer.id !== peerId) {
       otherPeer.socket.send(JSON.stringify({ type: 'new-peer', peerId }));
     }
