@@ -144,14 +144,19 @@ wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
         case 'video-on':
           await handleVideoOn(socket, data);
           break;
+        // case 'offer':
+        //   await handleOffer(socket, data);
+        //   break;
+        // case 'answer':
+        //   await handleAnswer(socket, data);
+        //   break;
+        // case 'ice-candidate':
+        //   await handleIceCandidate(socket, data);
+        //   break;
         case 'offer':
-          await handleOffer(socket, data);
-          break;
         case 'answer':
-          await handleAnswer(socket, data);
-          break;
         case 'ice-candidate':
-          await handleIceCandidate(socket, data);
+          relayMessage(data);
           break;
         default:
           console.warn(`Unknown message type: ${data.type}`);
@@ -172,6 +177,24 @@ wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
   // });
 
   // setInterval(cleanupRooms, ROOM_CLEANUP_INTERVAL);
+}
+
+function relayMessage(data: any) {
+  const { roomId, targetPeerId } = data;
+  const room = rooms.get(roomId);
+
+  if (!room) {
+    console.error(`Room ${roomId} not found`);
+    return;
+  }
+
+  const targetPeer = room.peers.get(targetPeerId);
+  if (!targetPeer) {
+    console.error(`Peer ${targetPeerId} not found in room ${roomId}`);
+    return;
+  }
+
+  targetPeer.socket.send(JSON.stringify(data));
 }
 
 async function handleCreateRoom(socket: WebSocket, data: any) {
@@ -226,7 +249,7 @@ async function handleJoinRoom(socket: WebSocket, data: any) {
   room.lastActivity = Date.now();
 
   const routerRtpCapabilities = room.router.rtpCapabilities;
-  socket.send(JSON.stringify({ type: 'joined-room', roomId, peerId, routerRtpCapabilities }));
+  socket.send(JSON.stringify({ type: 'joined-room', roomId, peers:Array.from(room.peers.keys()).filter(id => id !== peerId), routerRtpCapabilities }));
 
   for (const otherPeer of room.peers.values()) {
     console.log('otherPeer', otherPeer);
@@ -514,6 +537,7 @@ async function createWebRtcTransport(router: mediasoup.types.Router) {
 }
 
 async function handleOffer(socket: WebSocket, data: any) {
+  console.log("handleOffer...")
   const { roomId, peerId, targetPeerId, sdp } = data;
   const room = rooms.get(roomId);
 
@@ -553,6 +577,7 @@ async function handleAnswer(socket: WebSocket, data: any) {
     return;
   }
 
+  console.log("Relay answer to the target peer", targetPeer, peerId);
   // Relay the answer to the target peer
   targetPeer.socket.send(JSON.stringify({
     type: 'answer',
