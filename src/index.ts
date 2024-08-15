@@ -9,7 +9,6 @@ const ROOM_CLEANUP_INTERVAL = 60000; // 1 minute
 const ROOM_MAX_IDLE_TIME = 300000; // 5 minutes
 const app = express();
 const server = http.createServer(app);
-// const wss = new WebSocket.Server({ noServer: true });
 const wss = new WebSocket.Server({ server });
 const port = process.env.PORT || 3000;
 
@@ -68,17 +67,8 @@ app.get('/', (req, res) => {
   res.send('Video Call Server is running');
 });
 
-// // Upgrade HTTP server to WebSocket when necessary
-// server.on('upgrade', (request, socket, head) => {
-//   wss.handleUpgrade(request, socket, head, (ws) => {
-//     wss.emit('connection', ws, request);
-//   });
-// });
 
 async function createWebSocketServer(initialPort: number = 3000): Promise<WebSocket.Server> {
-  // const server = http.createServer();
-  // const wss = new WebSocket.Server({ server });
-
   return new Promise((resolve, reject) => {
     const tryPort = (port: number) => {
       server.listen(port, () => {
@@ -100,7 +90,6 @@ async function createWebSocketServer(initialPort: number = 3000): Promise<WebSoc
 
 async function main() {
   await initializeWorker();
-  // const wss = new WebSocket.Server({ noServer: true });
   const wss = await createWebSocketServer();
   // WebSocket connection handler
 wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
@@ -116,6 +105,18 @@ wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
             break;
         case 'join-room':
           await handleJoinRoom(socket, data);
+          break;
+        case 'leave-room':
+          await handleLeaveRoom(socket, data);
+          break;
+        case 'offer':
+          await handleOffer(socket, data);
+          break;
+        case 'answer':
+          await handleAnswer(socket, data);
+          break;
+        case 'ice-candidate':
+          await handleIceCandidate(socket, data);
           break;
         case 'create-transport':
           await handleCreateTransport(socket, data);
@@ -144,15 +145,6 @@ wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
         case 'video-on':
           await handleVideoOn(socket, data);
           break;
-        case 'offer':
-          await handleOffer(socket, data);
-          break;
-        case 'answer':
-          await handleAnswer(socket, data);
-          break;
-        case 'ice-candidate':
-          await handleIceCandidate(socket, data);
-          break;
         default:
           console.warn(`Unknown message type: ${data.type}`);
       }
@@ -167,18 +159,13 @@ wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
   });
 });
 
-  // server.listen(port, () => {
-  //   console.log(`Server running on port ${port}`);
-  // });
-
   // setInterval(cleanupRooms, ROOM_CLEANUP_INTERVAL);
 }
 
 async function handleCreateRoom(socket: WebSocket, data: any) {
   const { roomId, isPrivate } = data;
   if (rooms.has(roomId)) {
-    socket.send(JSON.stringify({ type: 'error', message: 'Room already exists' }));
-    console.log('Room already exists:', roomId);
+    socket.send(JSON.stringify({ type: 'room-exist', message: 'Room already exists' }));
     return;
   }
 
@@ -192,7 +179,6 @@ async function handleCreateRoom(socket: WebSocket, data: any) {
   };
   rooms.set(roomId, room);
   console.log('Room created:', roomId);
-  console.log('Rooms:', rooms);
 
   socket.send(JSON.stringify({ type: 'room-created', roomId, isPrivate }));
 }
@@ -336,7 +322,7 @@ function cleanupRooms() {
     if (now - room.lastActivity > ROOM_MAX_IDLE_TIME) {
       console.log(`Cleaning up inactive room: ${roomId}`);
       for (const peer of room.peers.values()) {
-        cleanupPeer(peer);
+        peer.socket.close();
       }
       room.router.close();
       rooms.delete(roomId);
@@ -345,13 +331,26 @@ function cleanupRooms() {
 }
 
 function handleDisconnect(socket: WebSocket) {
-  for (const room of rooms.values()) {
+  for (const [roomId, room] of rooms.entries()) {
     for (const [peerId, peer] of room.peers.entries()) {
       if (peer.socket === socket) {
         room.peers.delete(peerId);
-        cleanupPeer(peer);
-        notifyPeerLeft(room, peerId);
         room.lastActivity = Date.now();
+        
+        // Notify other peers about the disconnection
+        for (const otherPeer of room.peers.values()) {
+          otherPeer.socket.send(JSON.stringify({ type: 'peer-left', peerId }));
+        }
+
+        console.log(`Peer ${peerId} disconnected from room ${roomId}`);
+
+        // Only close the room if it's empty
+        if (room.peers.size === 0) {
+          room.router.close();
+          rooms.delete(roomId);
+          console.log(`Room ${roomId} closed and deleted`);
+        }
+
         break;
       }
     }
@@ -375,6 +374,30 @@ function notifyPeerLeft(room: Room, peerId: string) {
   console.log('Peer left:', peerId);
   for (const otherPeer of room.peers.values()) {
     otherPeer.socket.send(JSON.stringify({ type: 'peer-left', peerId }));
+  }
+}
+
+async function handleLeaveRoom(socket: WebSocket, data: any) {
+  const { roomId, peerId } = data;
+  const room = rooms.get(roomId);
+
+  if (room) {
+    room.peers.delete(peerId);
+    room.lastActivity = Date.now();
+
+    // Notify other peers about the peer leaving
+    for (const otherPeer of room.peers.values()) {
+      otherPeer.socket.send(JSON.stringify({ type: 'peer-left', peerId }));
+    }
+
+    console.log(`Peer ${peerId} left room ${roomId}`);
+
+    // Only close the room if it's empty
+    if (room.peers.size === 0) {
+      await room.router.close();
+      rooms.delete(roomId);
+      console.log(`Room ${roomId} closed and deleted`);
+    }
   }
 }
 
