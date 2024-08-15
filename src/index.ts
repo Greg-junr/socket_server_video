@@ -525,7 +525,7 @@ async function createWebRtcTransport(router: mediasoup.types.Router) {
       {
         ip: '0.0.0.0',
         // announcedIp: '127.0.0.1', // Replace with your public IP or domain
-        announcedIp: 'viaduct.proxy.rlwy.net:33910', // Replace with your public IP or domain
+        announcedIp: 'roundhouse.proxy.rlwy.net', // Replace with your public IP or domain
       },
     ],
     enableUdp: true,
