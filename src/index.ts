@@ -185,8 +185,9 @@ async function handleCreateRoom(socket: WebSocket, data: any) {
 
 
 async function handleJoinRoom(socket: WebSocket, data: any) {
-  const { roomId, peerId } = data;
+  const { roomId, peerId, user } = data;
   const room = rooms.get(roomId);
+  
 
   if (!room) {
     socket.send(JSON.stringify({ type: 'error', message: 'Room not found' }));
@@ -217,7 +218,7 @@ async function handleJoinRoom(socket: WebSocket, data: any) {
   // Notify existing peers about the new peer
   for (const otherPeer of room.peers.values()) {
     if (otherPeer.id !== peerId) {
-      otherPeer.socket.send(JSON.stringify({ type: 'new-peer', peerId }));
+      otherPeer.socket.send(JSON.stringify({ type: 'new-peer', peerId, user }));
     }
   }
 }
