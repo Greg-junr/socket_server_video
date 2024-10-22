@@ -2,9 +2,9 @@ import * as WebSocket from 'ws';
 import * as http from 'http';
 import express from 'express';
 import cors from 'cors';
-import { initializeWorker } from './worker';
-import { createWebSocketServer } from './websocket';
-import { handleWebSocketConnection } from './handlers';
+import { MediaSoupService } from './services/media-soup.service';
+import { WebSocketService } from './services/websocket.service';
+import { RoomController } from './controllers/room-controllers';
 
 const app = express();
 const server = http.createServer(app);
@@ -12,18 +12,40 @@ const port = process.env.PORT || 3000;
 
 app.use(cors());
 
-// HTTP endpoints
 app.get('/', (req, res) => {
   res.send('Video Call Server is running');
 });
 
 async function main() {
-  await initializeWorker();
-  const wss = await createWebSocketServer(server);
-  
-  // WebSocket connection handler
-  wss.on('connection', (socket: WebSocket, request: http.IncomingMessage) => {
-    handleWebSocketConnection(socket, request);
+  const mediaSoupService = new MediaSoupService();
+  await mediaSoupService.initializeWorker();
+
+  const webSocketService = new WebSocketService();
+  const roomController = new RoomController(webSocketService, mediaSoupService);
+
+  const wss = new WebSocket.Server({ server });
+  wss.on('connection', (socket: WebSocket) => {
+    socket.on('message', async (message: string) => {
+      const data = JSON.parse(message);
+      try {
+        switch (data.type) {
+          case 'create-room':
+            await roomController.handleCreateRoom(socket, data);
+            break;
+          case 'join-room':
+            roomController.handleJoinRoom(socket, data);
+            break;
+          case 'leave-room':
+            roomController.handleLeaveRoom(socket, data);
+            break;
+          default:
+            console.warn(`Unknown message type: ${data.type}`);
+        }
+      } catch (error) {
+        console.error('Error handling message:', error);
+        socket.send(JSON.stringify({ type: 'error', message: 'Internal server error' }));
+      }
+    });
   });
 }
 

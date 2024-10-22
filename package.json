@@ -28,7 +28,7 @@
     "@types/ws": "^8.5.12",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "mediasoup": "^3.14.9",
+    "mediasoup": "^3.14.16",
     "mediasoup-client": "^3.7.14",
     "nodemon": "^3.1.4",
     "socket.io": "^4.7.5",
