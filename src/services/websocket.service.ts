@@ -1,13 +1,20 @@
-import * as WebSocket from 'ws';
 import { Room } from '../models/room-model';
 import { Peer } from '../models/peer-model';
 import * as mediasoup from 'mediasoup';
 
 export class WebSocketService {
+  private static instance: WebSocketService;
   private rooms: Map<string, Room>;
 
-  constructor() {
+  private constructor() {
     this.rooms = new Map();
+  }
+
+  public static getInstance(): WebSocketService {
+    if (!WebSocketService.instance) {
+      WebSocketService.instance = new WebSocketService();
+    }
+    return WebSocketService.instance;
   }
 
   createRoom(roomId: string, isPrivate: boolean, router: mediasoup.types.Router) {

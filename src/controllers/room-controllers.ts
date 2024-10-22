@@ -5,12 +5,20 @@ import { Peer } from '../models/peer-model';
 import { mediaCodecs } from '../types/types';
 
 export class RoomController {
+  private static instance: RoomController;
   private webSocketService: WebSocketService;
   private mediaSoupService: MediaSoupService;
 
-  constructor(webSocketService: WebSocketService, mediaSoupService: MediaSoupService) {
+  private constructor(webSocketService: WebSocketService, mediaSoupService: MediaSoupService) {
     this.webSocketService = webSocketService;
     this.mediaSoupService = mediaSoupService;
+  }
+
+  public static getInstance(webSocketService: WebSocketService, mediaSoupService: MediaSoupService): RoomController {
+    if (!RoomController.instance) {
+      RoomController.instance = new RoomController(webSocketService, mediaSoupService);
+    }
+    return RoomController.instance;
   }
 
   async handleCreateRoom(socket: WebSocket, data: any) {

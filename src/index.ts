@@ -17,16 +17,20 @@ app.get('/', (req, res) => {
 });
 
 async function main() {
-  const mediaSoupService = new MediaSoupService();
+  const mediaSoupService = MediaSoupService.getInstance();
   await mediaSoupService.initializeWorker();
 
-  const webSocketService = new WebSocketService();
-  const roomController = new RoomController(webSocketService, mediaSoupService);
+  const webSocketService = WebSocketService.getInstance();
+  const roomController = RoomController.getInstance(webSocketService, mediaSoupService);
 
   const wss = new WebSocket.Server({ server });
+
   wss.on('connection', (socket: WebSocket) => {
     socket.on('message', async (message: string) => {
+
+      console.log('Received message:', message);
       const data = JSON.parse(message);
+
       try {
         switch (data.type) {
           case 'create-room':
